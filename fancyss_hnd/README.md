@@ -2,6 +2,11 @@
 
 > **fancyss_hnd**离线安装包仅能在koolshare 梅林/官改 hnd/axhnd/axhnd.675x平台机器上使用！具体支持机型如下：
 
+---
+**注意：** 本项目 fork 自 [hq450/fancyss](https://github.com/hq450/fancyss)，仅保留 fancyss_hnd，追加 trojan 和 trojan-go 的支持。
+fancyss_arm384 的 trojan-go 对应版请转向 [alalbb313/ss-trojan](https://github.com/alalbb313/ss-trojan)。
+
+---
 #### fancyss_hnd 支持机型/固件：
 
 | 机型/固件下载                                                | 类型     | 平台       | CPU     | 架构  | 支持版本 | 皮肤               |

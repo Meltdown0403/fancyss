@@ -5,8 +5,8 @@
 > 此项目提供用于asuswrt/merlin/openwrt为基础的，带软件中心固件路由器的科学上网。
 
 ---
-**注意：** 本项目 fork 自 hq450/fancyss(https://github.com/hq450/fancyss)，仅保留 fancyss_hnd，追加 trojan 和 trojan-go 的支持。
-fancyss_arm384 的 trojan-go 对应版请转向 alalbb313/ss-trojan(https://github.com/alalbb313/ss-trojan)。
+**注意：** 本项目 fork 自 [hq450/fancyss](https://github.com/hq450/fancyss)，仅保留 fancyss_hnd，追加 trojan 和 trojan-go 的支持。
+fancyss_arm384 的 trojan-go 对应版请转向 [alalbb313/ss-trojan](https://github.com/alalbb313/ss-trojan)。
 
 **提示1：** 如果提示检测到离线安装包名有非法关键词，开启路由器的SSH功能，登录并输入以下命令后，再进行离线安装。(arm380/X7.x版本固件需要请将软件中心更新到1.4.8及以上)
 ```bash

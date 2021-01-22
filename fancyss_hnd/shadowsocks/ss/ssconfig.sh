@@ -7,10 +7,16 @@ source /koolshare/scripts/ss_base.sh
 # Variable definitions
 THREAD=$(grep -c '^processor' /proc/cpuinfo)
 dbus set ss_basic_version_local=$(cat /koolshare/ss/version)
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
+LOGFILE2="/tmp/ssrun.log"
 LOG_FILE=/tmp/upload/ss_log.txt
 CONFIG_FILE=/koolshare/ss/ss.json
 V2RAY_CONFIG_FILE_TMP="/tmp/v2ray_tmp.json"
 V2RAY_CONFIG_FILE="/koolshare/ss/v2ray.json"
+TROJAN_CONFIG_FILE="/koolshare/ss/trojan.json"
+TROJAN2_CONFIG_FILE="/koolshare/ss/trojan2.json"
+TROJANGO_CONFIG_FILE="/koolshare/ss/trojango.json"
+TROJANGO2_CONFIG_FILE="/koolshare/ss/trojango2.json"
 LOCK_FILE=/var/lock/koolss.lock
 DNSF_PORT=7913
 DNSC_PORT=53
@@ -24,7 +30,18 @@ WAN_ACTION=$(ps | grep /jffs/scripts/wan-start | grep -v grep)
 NAT_ACTION=$(ps | grep /jffs/scripts/nat-start | grep -v grep)
 ARG_OBFS=""
 OUTBOUNDS="[]"
-
+#--------------------------------------------
+#ss_foreign_dns各值
+#3 dns2sock2
+#4 ss-tunnel
+#1cdns
+#5 chinadns1
+#2 chinadns2
+#10 chinadns-ng
+#6 https_dns_proxy
+#7 v2ray_dns
+#9 smartdns
+#8 直连
 #-----------------------------------------------
 
 cmd() {
@@ -96,6 +113,12 @@ __get_type_full_name() {
 	3)
 		echo "v2ray"
 		;;
+	4)
+		echo "trojan"
+		;;
+	5)
+		echo "trojan-go"
+		;;
 	esac
 }
 
@@ -112,6 +135,12 @@ __get_type_abbr_name() {
 		;;
 	3)
 		echo "v2ray"
+		;;
+	4)
+		echo "trojan"
+		;;
+	5)
+		echo "trojan-go"
 		;;
 	esac
 }
@@ -225,9 +254,12 @@ restore_conf() {
 }
 
 kill_process() {
+	rm -rf /tmp/ssrun.log
+	echo_date "执行关闭进程" >> $LOGFILE2
 	v2ray_process=$(pidof v2ray)
 	if [ -n "$v2ray_process" ]; then
 		echo_date 关闭V2Ray进程...
+		echo_date "关闭V2Ray进程" >> $LOGFILE2
 		# 有时候killall杀不了v2ray进程，所以用不同方式杀两次
 		killall v2ray >/dev/null 2>&1
 		kill -9 "$v2ray_process" >/dev/null 2>&1
@@ -235,109 +267,143 @@ kill_process() {
 	ssredir=$(pidof ss-redir)
 	if [ -n "$ssredir" ]; then
 		echo_date 关闭ss-redir进程...
+		echo_date "关闭ss-redir进程" >> $LOGFILE2
 		killall ss-redir >/dev/null 2>&1
 	fi
 	rssredir=$(pidof rss-redir)
 	if [ -n "$rssredir" ]; then
 		echo_date 关闭ssr-redir进程...
+		echo_date "关闭ssr-redir进程" >> $LOGFILE2
 		killall rss-redir >/dev/null 2>&1
 	fi
 	sslocal=$(ps | grep -w ss-local | grep -v "grep" | grep -w "23456" | awk '{print $1}')
 	if [ -n "$sslocal" ]; then
 		echo_date 关闭ss-local进程:23456端口...
+		echo_date "关闭ss-local进程:23456端口." >> $LOGFILE2
 		kill $sslocal >/dev/null 2>&1
 	fi
 	ssrlocal=$(ps | grep -w rss-local | grep -v "grep" | grep -w "23456" | awk '{print $1}')
 	if [ -n "$ssrlocal" ]; then
 		echo_date 关闭ssr-local进程:23456端口...
+		echo_date "关闭ssr-local进程:23456端口." >> $LOGFILE2
 		kill $ssrlocal >/dev/null 2>&1
 	fi
 	sstunnel=$(pidof ss-tunnel)
 	if [ -n "$sstunnel" ]; then
 		echo_date 关闭ss-tunnel进程...
+		echo_date "关闭ss-tunnel进程." >> $LOGFILE2
 		killall ss-tunnel >/dev/null 2>&1
 	fi
 	rsstunnel=$(pidof rss-tunnel)
 	if [ -n "$rsstunnel" ]; then
 		echo_date 关闭rss-tunnel进程...
+		echo_date "关闭rss-tunnel进程.." >> $LOGFILE2
 		killall rss-tunnel >/dev/null 2>&1
 	fi
 	chinadns_process=$(pidof chinadns)
 	if [ -n "$chinadns_process" ]; then
 		echo_date 关闭chinadns2进程...
+		echo_date "关闭chinadns2进程.." >> $LOGFILE2
 		killall chinadns >/dev/null 2>&1
 	fi
 	chinadns1_process=$(pidof chinadns1)
 	if [ -n "$chinadns1_process" ]; then
 		echo_date 关闭chinadns1进程...
+		echo_date "关闭chinadns1进程.." >> $LOGFILE2
 		killall chinadns1 >/dev/null 2>&1
 	fi
 	chinadnsNG_process=$(pidof chinadns-ng)
 	if [ -n "$chinadnsNG_process" ]; then
 		echo_date 关闭chinadns-ng进程...
+		echo_date "关闭chinadns-ng进程.." >> $LOGFILE2
 		killall chinadns-ng >/dev/null 2>&1
 	fi
 	cdns_process=$(pidof cdns)
 	if [ -n "$cdns_process" ]; then
 		echo_date 关闭cdns进程...
+		echo_date "关闭cdns进程.." >> $LOGFILE2
 		killall cdns >/dev/null 2>&1
 	fi
 	dns2socks_process=$(pidof dns2socks)
 	if [ -n "$dns2socks_process" ]; then
 		echo_date 关闭dns2socks进程...
+		echo_date "关闭dns2socks进程." >> $LOGFILE2
 		killall dns2socks >/dev/null 2>&1
 	fi
 	smartdns_process=$(pidof smartdns)
 	if [ -n "$smartdns_process" ]; then
 		echo_date 关闭smartdns进程...
+		echo_date "关闭smartdns进程." >> $LOGFILE2
 		killall smartdns >/dev/null 2>&1
 	fi
 	koolgame_process=$(pidof koolgame)
 	if [ -n "$koolgame_process" ]; then
 		echo_date 关闭koolgame进程...
+		echo_date "关闭koolgame进程." >> $LOGFILE2
 		killall koolgame >/dev/null 2>&1
 	fi
 	pdu_process=$(pidof pdu)
 	if [ -n "$pdu_process" ]; then
 		echo_date 关闭pdu进程...
+		echo_date "关闭pdu进程." >> $LOGFILE2
 		kill -9 $pdu >/dev/null 2>&1
 	fi
 	client_linux_arm7_process=$(pidof client_linux_arm7)
 	if [ -n "$client_linux_arm7_process" ]; then
 		echo_date 关闭kcp协议进程...
+		echo_date "关闭kcp协议进程." >> $LOGFILE2
 		killall client_linux_arm7 >/dev/null 2>&1
 	fi
 	haproxy_process=$(pidof haproxy)
 	if [ -n "$haproxy_process" ]; then
 		echo_date 关闭haproxy进程...
+		echo_date "关闭haproxy进程." >> $LOGFILE2
 		killall haproxy >/dev/null 2>&1
 	fi
 	speederv1_process=$(pidof speederv1)
 	if [ -n "$speederv1_process" ]; then
 		echo_date 关闭speederv1进程...
+		echo_date "关闭speederv1进程." >> $LOGFILE2
 		killall speederv1 >/dev/null 2>&1
 	fi
 	speederv2_process=$(pidof speederv2)
 	if [ -n "$speederv2_process" ]; then
 		echo_date 关闭speederv2进程...
+		echo_date "关闭speederv2进程." >> $LOGFILE2
 		killall speederv2 >/dev/null 2>&1
 	fi
 	ud2raw_process=$(pidof udp2raw)
 	if [ -n "$ud2raw_process" ]; then
 		echo_date 关闭ud2raw进程...
+		echo_date "关闭ud2raw进程." >> $LOGFILE2
 		killall udp2raw >/dev/null 2>&1
 	fi
 	https_dns_proxy_process=$(pidof https_dns_proxy)
 	if [ -n "$https_dns_proxy_process" ]; then
 		echo_date 关闭https_dns_proxy进程...
+		echo_date "关闭https_dns_proxy进程." >> $LOGFILE2
 		killall https_dns_proxy >/dev/null 2>&1
 	fi
 	haveged_process=$(pidof haveged)
 	if [ -n "$haveged_process" ]; then
 		echo_date 关闭haveged进程...
+		echo_date "关闭haveged进程." >> $LOGFILE2
 		killall haveged >/dev/null 2>&1
 	fi
+	trojan_process=$(pidof trojan)
+	if [ -n "$trojan_process" ];then 
+		echo_date 关闭trojan进程...
+		echo_date "关闭trojan进程." >> $LOGFILE2
+		killall trojan >/dev/null 2>&1
+	fi
+	trojango_process=$(pidof trojan-go)
+	if [ -n "$trojango_process" ];then 
+		echo_date 关闭trojan-go进程...
+		echo_date "关闭trojan-go进程." >> $LOGFILE2
+		killall trojan-go >/dev/null 2>&1
+	fi
 	echo 1 >/proc/sys/net/ipv4/tcp_fastopen
+	echo_date "设置tcp_fastopen为1." >> $LOGFILE2
 }
 
 # ================================= ss prestart ===========================
@@ -349,13 +415,16 @@ ss_pre_start() {
 			echo_date 插件启动前触发:触发启动负载均衡功能！
 			#start haproxy
 			sh /koolshare/scripts/ss_lb_config.sh
+			echo_date "插件启动前触发:触发启动负载均衡功能！ss_lb_config.sh" >> $LOGFILE2
 		else
 			echo_date 插件启动前触发:未选择负载均衡节点，不触发负载均衡启动！
+			echo_date "插件启动前触发:未选择负载均衡节点，不触发负载均衡启动！" >> $LOGFILE2
 		fi
 	else
 		if [ -n ${IS_LOCAL_ADDR} -a "$ss_basic_port" == "$ss_lb_port" ]; then
 			echo_date 插件启动前触发【警告】：你选择了负载均衡节点，但是负载均衡开关未启用！！
-		#else
+			echo_date "插件启动前触发【警告】：你选择了负载均衡节点，但是负载均衡开关未启用！！" >> $LOGFILE2
+			#else
 			#echo_date ss启动前触发：你选择了普通节点，不触发负载均衡启动！
 		fi
 	fi
@@ -363,16 +432,20 @@ ss_pre_start() {
 # ================================= ss start ==============================
 
 resolv_server_ip() {
+	echo_date "resolv_server_ip服务器域名解析，Trojan或Trojan-go直接应用域名"
 	local tmp server_ip
-	if [ "$ss_basic_type" == "3" ] && [ "$ss_basic_v2ray_use_json" == "1" ]; then
+	if [ "$ss_basic_type" == "3" ] && [ "$ss_basic_v2ray_use_json" == "1" ] || [ "$ss_basic_type" == "4" ] || [ "$ss_basic_type" == "5" ]; then
 		#v2ray json配置在后面单独处理
+		echo_date "v2ray/trojan json配置在后面单独处理" >> $LOGFILE2
 		return 1
 	else
 		# 判断服务器域名格式
+		echo_date "判断服务器域名格式" >> $LOGFILE2
 		tmp=$(__valid_ip "$ss_basic_server")
 		if [ $? == 0 ]; then
 			# server is ip address format, not need to resolve.
 			echo_date "检测到你的$(__get_type_abbr_name)服务器已经是IP格式：$ss_basic_server,跳过解析... "
+			echo_date "检测到你的$(__get_type_abbr_name)服务器已经是IP格式：$ss_basic_server,跳过解析" >> $LOGFILE2
 			ss_basic_server_ip="$ss_basic_server"
 			dbus set ss_basic_server_ip=$ss_basic_server
 		else
@@ -383,6 +456,7 @@ resolv_server_ip() {
 			case $? in
 			0)
 				echo_date "$(__get_type_abbr_name)服务器【$ss_basic_server】的ip地址解析成功：$server_ip"
+				echo_date "$(__get_type_abbr_name)服务器【$ss_basic_server】的ip地址解析成功：$server_ip" >> $LOGFILE2
 				echo "server=/$ss_basic_server/$(__get_server_resolver)#$(__get_server_resolver_port)" >/jffs/configs/dnsmasq.d/ss_server.conf
 				# server is domain format and success resolved.
 				# 记录解析结果到/tmp/ss_host.conf，方便插件触发重启设定工作
@@ -396,6 +470,7 @@ resolv_server_ip() {
 			1)
 				# server is domain format and failed to resolve.
 				echo_date "$(__get_type_abbr_name)服务器的ip地址解析失败，将由ss-redir自己解析... "
+				echo_date "$(__get_type_abbr_name)服务器的ip地址解析失败，将由ss-redir自己解析" >> $LOGFILE2
 				echo "server=/$ss_basic_server/$(__get_server_resolver)#$(__get_server_resolver_port)" >/jffs/configs/dnsmasq.d/ss_server.conf
 				unset ss_basic_server_ip
 				dbus remvoe ss_basic_server_ip
@@ -404,6 +479,8 @@ resolv_server_ip() {
 				# server is not ip either domain!
 				echo_date "错误！！检测到你设置的服务器域名既不是ip地址，也不是域名格式！"
 				echo_date "请更正你的错误然后重试！！"
+				echo_date "错误！！检测到你设置的服务器域名既不是ip地址，也不是域名格式！" >> $LOGFILE2
+				echo_date "请更正你的错误然后重试！！" >> $LOGFILE2
 				close_in_five
 				;;
 			esac
@@ -412,26 +489,31 @@ resolv_server_ip() {
 }
 
 ss_arg() {
+	echo_date "ss_arg当为SS节点进行参数检查，非SS直接进行下一步"
 	[ "$ss_basic_type" != "0" ] && return
 	
 	# v2ray-plugin or simple obfs
 	if [ "$ss_basic_ss_v2ray" == "1" ]; then
 		ARG_OBFS="--plugin v2ray-plugin --plugin-opts $ss_basic_ss_v2ray_opts"
 		echo_date "检测到开启了v2ray-plugin，将忽略obfs设置。"
+		echo_date "检测到开启了v2ray-plugin，将忽略obfs设置。" >> $LOGFILE2
 	elif [ "$ss_basic_ss_obfs" == "http" ]; then
 		echo_date "检测到开启了obfs。"
+		echo_date "检测到开启了obfs1。" >> $LOGFILE2
 		ARG_OBFS="--plugin obfs-local --plugin-opts obfs=http"
 		if [ -n "$ss_basic_ss_obfs_host" ]; then
 			ARG_OBFS=$ARG_OBFS";obfs-host=$ss_basic_ss_obfs_host"
 		fi
 	elif [ "$ss_basic_ss_obfs" == "tls" ]; then
 		echo_date "检测到开启了obfs。"
+		echo_date "检测到开启了obfs2。" >> $LOGFILE2
 		ARG_OBFS="--plugin obfs-local --plugin-opts obfs=tls"
 		if [ -n "$ss_basic_ss_obfs_host" ]; then
 			ARG_OBFS=$ARG_OBFS";obfs-host=$ss_basic_ss_obfs_host"
 		fi
 	else
 		echo_date "没有开启任何ss插件设置。"
+		echo_date "没有开启任何ss插件设置。" >> $LOGFILE2
 		ARG_OBFS=""
 	fi
 }
@@ -503,6 +585,7 @@ creat_ss_json() {
 }
 
 get_dns_name() {
+	echo_date "get_dns_name" >> $LOGFILE2
 	case "$1" in
 	1)
 		echo "cdns"
@@ -544,9 +627,11 @@ get_dns_name() {
 start_sslocal() {
 	if [ "$ss_basic_type" == "1" ]; then
 		echo_date 开启ssr-local，提供socks5代理端口：23456
+		echo_date "ss_basic_type=$ss_basic_type,开启ssr-local，提供socks5代理端口：23456" >> $LOGFILE2
 		rss-local -l 23456 -c $CONFIG_FILE -u -f /var/run/sslocal1.pid >/dev/null 2>&1
 	elif [ "$ss_basic_type" == "0" ]; then
 		echo_date 开启ss-local，提供socks5代理端口：23456
+		echo_date "ss_basic_type=$ss_basic_type,开启ss-local，提供socks5代理端口：23456" >> $LOGFILE2
 		if [ "$ss_basic_ss_obfs" == "0" ] && [ "$ss_basic_ss_v2ray" == "0" ]; then
 			ss-local -l 23456 -c $CONFIG_FILE -u -f /var/run/sslocal1.pid >/dev/null 2>&1
 		else
@@ -556,6 +641,7 @@ start_sslocal() {
 }
 
 start_dns() {
+	echo_date "启用DNS" >> $LOGFILE2
 	# 判断使用何种DNS优先方案
 	if [ "$ss_basic_mode" == "1" -a -z "$chn_on" -a -z "$all_on" ] || [ "$ss_basic_mode" == "6" ];then
 		# gfwlist模式的时候，且访问控制主机中不存在 大陆白名单模式 游戏模式 全局模式，则使用国内优先模式
@@ -571,12 +657,15 @@ start_dns() {
 		ss_foreign_dns="8"
 		dbus set ss_foreign_dns="8"
 	fi
+		echo_date "DNS_PLAN模式是$DNS_PLAN" >> $LOGFILE2
 
 	# Start cdns
 	if [ "$ss_foreign_dns" == "1" ]; then
 		[ "$DNS_PLAN" == "1" ] && echo_date "开启cdns，用于【国外gfwlist站点】的DNS解析..."
 		[ "$DNS_PLAN" == "2" ] && echo_date "开启cdns，用于【国外所有网站】的DNS解析..."
 		cdns -c /koolshare/ss/rules/cdns.json >/dev/null 2>&1 &
+		echo_date "启用cdns"  >> $LOGFILE2
+
 	fi
 
 	# Start chinadns2
@@ -617,15 +706,25 @@ start_dns() {
 			ss_real_server_ip="8.8.8.8"
 		fi
 		chinadns -p $DNSF_PORT -s $ss_chinadns_user -e $clinet_ip,$ss_real_server_ip -c /koolshare/ss/rules/chnroute.txt >/dev/null 2>&1 &
+		echo_date "启用chinadns2,各参数值为" $DNSF_PORT, $ss_chinadns_user, $clinet_ip, $ss_real_server_ip   >> $LOGFILE2
 	fi
 
 	# Start DNS2SOCKS (default)
 	if [ "$ss_foreign_dns" == "3" ] || [ -z "$ss_foreign_dns" ]; then
 		[ -z "$ss_foreign_dns" ] && dbus set ss_foreign_dns="3"
+		if [ "$ss_basic_type" == "4" ]; then
+			/koolshare/bin/trojan -c /koolshare/ss/trojan2.json >/dev/null 2>&1 &
+		fi
+		if [ "$ss_basic_type" == "5" ]; then
+			/koolshare/bin/trojan-go -config /koolshare/ss/trojango2.json >/dev/null 2>&1 &
+		fi
+
 		start_sslocal
+		echo_date "启用start_sslocal" >> $LOGFILE2
 		[ "$DNS_PLAN" == "1" ] && echo_date "开启dns2socks，用于【国外gfwlist站点】的DNS解析..."
 		[ "$DNS_PLAN" == "2" ] && echo_date "开启dns2socks，用于【国外所有网站】的DNS解析..."
 		dns2socks 127.0.0.1:23456 "$ss_dns2socks_user" 127.0.0.1:$DNSF_PORT >/dev/null 2>&1 &
+		echo_date "启用DNS2SOCKS,各参数值为" $ss_dns2socks_user, $DNSF_PORT >> $LOGFILE2
 	fi
 
 	# Start ss-tunnel
@@ -634,13 +733,17 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启ssr-tunnel，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启ssr-tunnel，用于【国外所有网站】的DNS解析..."
 			rss-tunnel -c $CONFIG_FILE -l $DNSF_PORT -L $ss_sstunnel_user -u -f /var/run/sstunnel.pid >/dev/null 2>&1
+			echo_date "启用rss-tunnel,各参数值为" $CONFIG_FILE, $DNSF_PORT, $ss_sstunnel_user >> $LOGFILE2
+			
 		elif [ "$ss_basic_type" == "0" ]; then
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启ss-tunnel，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启ss-tunnel，用于【国外所有网站】的DNS解析..."
 			if [ "$ss_basic_ss_obfs" == "0" ] && [ "$ss_basic_ss_v2ray" == "0" ]; then
 				ss-tunnel -c $CONFIG_FILE -l $DNSF_PORT -L $ss_sstunnel_user -u -f /var/run/sstunnel.pid >/dev/null 2>&1
+				echo_date "启用ss-tunnel,各参数值为" $CONFIG_FILE, $DNSF_PORT, $ss_sstunnel_user >> $LOGFILE2
 			else
 				ss-tunnel -c $CONFIG_FILE -l $DNSF_PORT -L $ss_sstunnel_user $ARG_OBFS -u -f /var/run/sstunnel.pid >/dev/null 2>&1
+				echo_date "启用ss-tunnel,各参数值为" $CONFIG_FILE, $DNSF_PORT, $ss_sstunnel_user >> $LOGFILE2
 			fi
 		elif [ "$ss_basic_type" == "3" ]; then
 			echo_date V2ray下不支持ss-tunnel，改用dns2socks！
@@ -649,6 +752,7 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启dns2socks，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启dns2socks，用于【国外所有网站】的DNS解析..."
 			dns2socks 127.0.0.1:23456 "$ss_dns2socks_user" 127.0.0.1:$DNSF_PORT >/dev/null 2>&1 &
+			echo_date "V2ray下不支持ss-tunnel，改用dns2socks,各参数值为" $ss_dns2socks_user, $DNSF_PORT >> $LOGFILE2
 		fi
 	fi
 
@@ -663,6 +767,7 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启dns2socks，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启dns2socks，用于【国外所有网站】的DNS解析..."
 			dns2socks 127.0.0.1:23456 "$ss_dns2socks_user" 127.0.0.1:$DNSF_PORT >/dev/null 2>&1 &
+			echo_date "中国DNS选择SmartDNS和外国DNS选择chiandns1冲突，将外国DNS默认改为dns2socks,各参数值为" $ss_dns2socks_user, $DNSF_PORT >> $LOGFILE2
 		else
 			start_sslocal
 			echo_date 开启dns2socks，用于chinadns1上游...
@@ -670,6 +775,7 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启chinadns1，用于【国内所有网站 + 国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启chinadns1，用于【国内cdn网站 + 国外所有网站】的DNS解析..."
 			chinadns1 -p $DNSF_PORT -s $CDN,127.0.0.1:1055 -d -c /koolshare/ss/rules/chnroute.txt >/dev/null 2>&1 &
+			echo_date "开启chinadns1,各参数值为" $CDN, $DNSF_PORT >> $LOGFILE2
 		fi
 	fi
 
@@ -682,6 +788,7 @@ start_dns() {
 		[ "$DNS_PLAN" == "2" ] && echo_date "开启chinadns-ng，用于【国内所有网站 + 国外所有网站】的DNS解析..."
 		cat /koolshare/ss/rules/gfwlist.conf|sed '/^server=/d'|sed 's/ipset=\/.//g'|sed 's/\/gfwlist//g' > /tmp/gfwlist.txt
 		chinadns-ng -l ${DNSF_PORT} -c ${CDN}#${DNSC_PORT} -t 127.0.0.1#1055 -g /tmp/gfwlist.txt -m /koolshare/ss/rules/cdn.txt -M >/dev/null 2>&1 &
+		echo_date "chinadns-ng启用,各参数值为" ${CDN}, ${DNSF_PORT} >> $LOGFILE2
 	fi
 
 	#start https_dns_proxy
@@ -703,6 +810,7 @@ start_dns() {
 			ss_real_server_ip="8.8.8.8"
 		fi
 		https_dns_proxy -u nobody -p $DNSF_PORT -b 8.8.8.8,1.1.1.1,8.8.4.4,1.0.0.1,145.100.185.15,145.100.185.16,185.49.141.37 -e $ss_real_server_ip/16 -r "https://cloudflare-dns.com/dns-query?ct=application/dns-json&" -d
+		echo_date "https_dns_proxy启用,各参数值为" ${CDN}, ${DNSF_PORT} >> $LOGFILE2
 	fi
 
 	# start v2ray DNSF_PORT
@@ -716,6 +824,7 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启dns2socks，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启dns2socks，用于【国外所有网站】的DNS解析..."
 			dns2socks 127.0.0.1:23456 "$ss_dns2socks_user" 127.0.0.1:$DNSF_PORT >/dev/null 2>&1 &
+			echo_date "不支持v2ray dns，改用dns2socks！,各参数值为" $ss_dns2socks_user, $DNSF_PORT >> $LOGFILE2
 		fi
 	fi
 
@@ -731,6 +840,7 @@ start_dns() {
 			sed '/^#/d /^$/d' /koolshare/ss/rules/smartdns_template.conf > /tmp/smartdns.conf
 		#fi
 		smartdns -c /tmp/smartdns.conf >/dev/null 2>&1 &
+		echo_date "smartdns启用！国内国外都启用" >> $LOGFILE2
 	elif [ "$ss_dns_china" == "13" ] && [ "$ss_foreign_dns" != "9" ]; then
 		# 国内启用SmartDNS，国外不启用SmartDNS （此情况下，如果是gfwlist模式则不用cdn.conf；如果是大陆白名单模式则是根据国外DNS的选择而决定是否使用cdn.conf）
 		[ "$DNS_PLAN" == "1" ] && echo_date "开启SmartDNS，用于【国内所有网站】的DNS解析..."
@@ -742,6 +852,7 @@ start_dns() {
 			sed '/^#/d /^$/d /foreign/d' /koolshare/ss/rules/smartdns_template.conf > /tmp/smartdns.conf
 		#fi
 		smartdns -c /tmp/smartdns.conf >/dev/null 2>&1 &
+		echo_date "smartdns启用！国内启用，国外不启用" >> $LOGFILE2
 	elif [ "$ss_dns_china" != "13" ] && [ "$ss_foreign_dns" == "9" ]; then
 		# 国内不启用SmartDNS，国外启用SmartDNS （此情况下，如果是gfwlist模式则不用cdn.conf；如果是大陆白名单模式则需要使用cdn.conf）
 		[ "$DNS_PLAN" == "1" ] && echo_date "开启SmartDNS，用于【国外gfwlist站点】的DNS解析..."
@@ -753,12 +864,14 @@ start_dns() {
 			sed '/^#/d /^$/d /china/d' /koolshare/ss/rules/smartdns_template.conf > /tmp/smartdns.conf
 		#fi
 		smartdns -c /tmp/smartdns.conf >/dev/null 2>&1 &
+		echo_date "smartdns启用！国内不启用，国外启用" >> $LOGFILE2
 	fi
 
 	# direct
 	if [ "$ss_foreign_dns" == "8" ]; then
 		if [ "$ss_basic_mode" == "6" ]; then
 			echo_date 回国模式，国外DNS采用直连方案。
+			echo_date "回国模式，国外DNS采用直连方案" >> $LOGFILE2
 		else
 			echo_date 非回国模式，国外DNS直连解析不能使用，自动切换到dns2socks方案。
 			dbus set ss_foreign_dns=3
@@ -766,6 +879,7 @@ start_dns() {
 			[ "$DNS_PLAN" == "1" ] && echo_date "开启dns2socks，用于【国外gfwlist站点】的DNS解析..."
 			[ "$DNS_PLAN" == "2" ] && echo_date "开启dns2socks，用于【国外所有网站】的DNS解析..."
 			dns2socks 127.0.0.1:23456 "$ss_dns2socks_user" 127.0.0.1:$DNSF_PORT >/dev/null 2>&1 &
+			echo_date "非回国模式，国外DNS直连解析不能使用，自动切换到dns2socks方案" $ss_dns2socks_user, $DNSF_PORT >> $LOGFILE2
 		fi
 	fi
 }
@@ -782,6 +896,7 @@ detect_domain() {
 }
 
 create_dnsmasq_conf() {
+	echo_date 'create_dnsmasq_conf创建dnsmasq'
 	if [ "$ss_dns_china" == "1" ]; then
 		if [ "$ss_basic_mode" == "6" ]; then
 			# 使用回国模式的时候，ISP dns是国外的，所以这里直接用114取代
@@ -945,11 +1060,13 @@ create_dnsmasq_conf() {
 	if [ "$ss_basic_mode" == "6" ]; then
 		# 回国模式中，因为国外DNS无论如何都不会污染的，所以采取的策略是直连就行，默认国内优先即可
 		echo_date 自动判断在回国模式中使用国内优先模式，不加载cdn.conf
+		echo_date "自动判断在回国模式中使用国内优先模式，不加载cdn.conf." >> $LOGFILE2
 	else
 		if [ "$ss_basic_mode" == "1" -a -z "$chn_on" -a -z "$all_on" ] || [ "$ss_basic_mode" == "6" ]; then
 			# gfwlist模式的时候，且访问控制主机中不存在 大陆白名单模式 游戏模式 全局模式，则使用国内优先模式
 			# 回国模式下自动判断使用国内优先
 			echo_date 自动判断使用国内优先模式，不加载cdn.conf
+			echo_date "自动判断使用国内优先模式，不加载cdn.conf." >> $LOGFILE2
 		else
 			# 其它情况，均使用国外优先模式，以下区分是否加载cdn.conf
 			# if [ "$ss_foreign_dns" == "2" ] || [ "$ss_foreign_dns" == "5" ] || [ "$ss_foreign_dns" == "9" -a "$ss_dns_china" == "13" ]; then
@@ -957,11 +1074,18 @@ create_dnsmasq_conf() {
 				# 因为chinadns1 chinadns2自带国内cdn，所以也不需要cdn.conf
 				echo_date 自动判断dns解析使用国外优先模式...
 				echo_date 国外解析方案【$(get_dns_name $ss_foreign_dns)】自带国内cdn，无需加载cdn.conf，路由器开销小...
+				echo_date "自动判断dns解析使用国外优先模式...." >> $LOGFILE2
+				echo_date "国外解析方案【$(get_dns_name $ss_foreign_dns)】自带国内cdn，无需加载cdn.conf，路由器开销小...." >> $LOGFILE2
+				
 			else
 				echo_date 自动判断dns解析使用国外优先模式...
 				echo_date 国外解析方案【$(get_dns_name $ss_foreign_dns)】，需要加载cdn.conf提供国内cdn...
 				echo_date 建议将系统dnsmasq替换为dnsmasq-fastlookup，以减轻路由cpu消耗...
 				echo_date 生成cdn加速列表到/tmp/sscdn.conf，加速用的dns：$CDN
+				echo_date "自动判断dns解析使用国外优先模式..." >> $LOGFILE2
+				echo_date "国外解析方案【$(get_dns_name $ss_foreign_dns)】，需要加载cdn.conf提供国内cdn" >> $LOGFILE2
+				echo_date "建议将系统dnsmasq替换为dnsmasq-fastlookup，以减轻路由cpu消耗..." >> $LOGFILE2
+				echo_date "生成cdn加速列表到/tmp/sscdn.conf，加速用的dns：$CDN" >> $LOGFILE2
 				echo "#for china site CDN acclerate" >>/tmp/sscdn.conf
 				cat /koolshare/ss/rules/cdn.txt | sed "s/^/server=&\/./g" | sed "s/$/\/&$CDN#$DNSC_PORT/g" | sort | awk '{if ($0!=line) print;line=$0}' >>/tmp/sscdn.conf
 			fi
@@ -1018,6 +1142,8 @@ start_kcp() {
 	# Start kcp
 	if [ "$ss_basic_use_kcp" == "1" ]; then
 		echo_date 启动KCP协议进程，为了更好的体验，建议在路由器上创建虚拟内存.
+		echo_date "ss_basic_use_kcp=$ss_basic_use_kcp,启动KCP协议进程，为了更好的体验，建议在路由器上创建虚拟内存." >> $LOGFILE2
+		
 		export GOGC=30
 		[ -z "$ss_basic_kcp_server" ] && ss_basic_kcp_server="$ss_basic_server"
 		if [ "$ss_basic_kcp_method" == "1" ]; then
@@ -1044,6 +1170,8 @@ start_kcp() {
 				-r $ss_basic_kcp_server:$ss_basic_kcp_port \
 				$ss_basic_kcp_parameter
 		fi
+	else
+		echo_date "ss_basic_use_kcp=$ss_basic_use_kcp,不启动KCP协议进程" >> $LOGFILE2
 	fi
 }
 
@@ -1127,11 +1255,13 @@ start_speeder() {
 start_ss_redir() {
 	if [ "$ss_basic_type" == "1" ]; then
 		echo_date 开启ssr-redir进程，用于透明代理.
+		echo_date "ss_basic_type=$ss_basic_type,开启ssr-redir进程，用于透明代理" >> $LOGFILE2
 		BIN=rss-redir
 		ARG_OBFS=""
 	elif [ "$ss_basic_type" == "0" ]; then
 		# ss-libev需要大于160的熵才能正常工作
 		echo_date 开启ss-redir进程，用于透明代理.
+		echo_date "ss_basic_type=$ss_basic_type,开启ss-redir进程，用于透明代理" >> $LOGFILE2
 		if [ "$ss_basic_ss_obfs" == "0" ] && [ "$ss_basic_ss_v2ray" == "0" ]; then
 			BIN=ss-redir
 			ARG_OBFS=""
@@ -1234,11 +1364,325 @@ start_ss_redir() {
 
 	start_speeder
 }
+creat_trojango_json(){
+	if [ -n "$WAN_ACTION" ]; then
+		echo_date "检测到网络拨号/开机触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！"
+		echo_date "检测到网络拨号/开机触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！" >> $LOGFILE2
+		return 0
+	elif [ -n "$NAT_ACTION" ]; then
+		echo_date "检测到防火墙重启触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！"
+		echo_date "检测到防火墙重启触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！" >> $LOGFILE2
+		return 0
+	else
+		echo_date "创建$(__get_type_abbr_name)配置文件到$TROJANGO_CONFIG_FILE"
+		echo_date "创建$(__get_type_abbr_name)配置文件到$TROJANGO_CONFIG_FILE" >> $LOGFILE2
+	fi
+		rm -rf "$TROJANGO_CONFIG_FILE"
 
+		if [ "$ss_basic_type" == "5" ]; then
+			echo_date "类型为tj-go，值为$ss_basic_type" >> $LOGFILE2
+		cat > "$TROJANGO_CONFIG_FILE" <<-EOF
+		{
+		    "run_type": "nat",
+		    "local_addr": "0.0.0.0",
+		    "local_port": 3333,
+		    "remote_addr": "$ss_basic_server",
+		    "remote_port": $ss_basic_port,
+		    "password": [
+			"$ss_basic_password"
+		    ],
+			"buffer_size": 32,
+		    "log_level": 1,
+		    "ssl": {
+			"verify": true,
+			"verify_hostname": true,
+			"cert": "/rom/etc/ssl/certs/ca-certificates.crt",
+			"cipher": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+			"cipher_tls13": "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+			"sni": "",
+			"alpn": [
+			    "h2",
+			    "http/1.1"
+			],
+			"reuse_session": true,
+			"session_ticket": false,
+			"curves": ""
+		    },
+		    "tcp": {
+			"no_delay": true,
+			"keep_alive": true,
+			"reuse_port": false,
+			"fast_open": true,
+			"fast_open_qlen": 20
+		    },
+			"mux":{
+				"enabled": $(get_function_switch $ss_basic_v2ray_mux_enable),
+				"concurrency": $ss_basic_v2ray_mux_concurrency,
+    			"idle_timeout": 60
+			},
+			 "router": {
+   				 "enabled": false,
+   				 "bypass": [],
+   				 "proxy": [],
+   				 "block": [],
+   				 "route_by_ip": false,
+   				 "route_by_ip_on_nonmatch": false,
+   				 "default_policy": "proxy"
+  			}
+		}
+			EOF
+		cat > "$TROJANGO2_CONFIG_FILE" <<-EOF
+		{
+		    "run_type": "client",
+		    "local_addr": "127.0.0.1",
+		    "local_port": 23456,
+		    "remote_addr": "$ss_basic_server",
+		    "remote_port": $ss_basic_port,
+		    "password": [
+			"$ss_basic_password"
+		    ],
+			"buffer_size": 32,
+		    "log_level": 1,
+		    "ssl": {
+			"verify": true,
+			"verify_hostname": true,
+			"cert": "/rom/etc/ssl/certs/ca-certificates.crt",
+			"cipher": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+			"cipher_tls13": "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+			"sni": "",
+			"alpn": [
+			    "h2",
+			    "http/1.1"
+			],
+			"reuse_session": true,
+			"session_ticket": false,
+			"curves": ""
+		    },
+		    "tcp": {
+			"no_delay": true,
+			"keep_alive": true,
+			"reuse_port": false,
+			"fast_open": true,
+			"fast_open_qlen": 20
+		    },
+			"mux":{
+				"enabled": $(get_function_switch $ss_basic_v2ray_mux_enable),
+				"concurrency": $ss_basic_v2ray_mux_concurrency,
+    			"idle_timeout": 60
+			},
+			 "router": {
+   				 "enabled": false,
+   				 "bypass": [],
+   				 "proxy": [],
+   				 "block": [],
+   				 "route_by_ip": false,
+   				 "route_by_ip_on_nonmatch": false,
+   				 "default_policy": "proxy"
+  			}
+		}
+			EOF
+			echo_date trojan-go配置文件生成成功.
+			echo_date "trojan-go配置文件生成成功." >> $LOGFILE2
+		else
+			echo_date trojan-go配置文件生成失败，请检查设置!!!
+			echo_date "trojan-go配置文件生成失败，请检查设置!!!" >> $LOGFILE2
+		fi
+
+}
+start_trojango(){
+	echo_date 开启trojan-go主进程...
+	if [ "$ss_basic_tfo" == "1" ]; then
+		echo_date 开启tcp fast open支持.
+		echo 3 >/proc/sys/net/ipv4/tcp_fastopen
+		echo_date "开启TROJANGO前，开启tcp fast open支持，需服务端开启支持" >> $LOGFILE2
+
+	fi
+
+	cd /koolshare/bin
+	#/jffs/softcenter/bin/trojan -c /jffs/softcenter/ss/trojan.json -l /jffs/softcenter/ss/trojan.log >/dev/null 2>&1 &
+	/koolshare/bin/trojan-go -config /koolshare/ss/trojango.json >/dev/null 2>&1 &
+	
+	echo_date "trojan-go启用进程!!!" >> $LOGFILE2
+	local trojangopid
+	local i=10
+	until [ -n "$trojangopid" ]; do
+		i=$(($i - 1))
+		trojangopid=$(pidof trojan-go)
+		if [ "$i" -lt 1 ];then
+			echo_date "trojan-go进程启动失败！"
+			close_in_five
+		fi
+		sleep 1
+	done
+	echo_date trojan-go启动成功，pid：$trojangopid
+	echo_date "trojan-go启动成功，pid：$trojangopid" >> $LOGFILE2
+}
+creat_trojan_json(){
+	if [ -n "$WAN_ACTION" ]; then
+		echo_date "检测到网络拨号/开机触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！"
+		echo_date "检测到网络拨号/开机触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！" >> $LOGFILE2
+		return 0
+	elif [ -n "$NAT_ACTION" ]; then
+		echo_date "检测到防火墙重启触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！"
+		echo_date "检测到防火墙重启触发启动，不创建$(__get_type_abbr_name)配置文件，使用上次的配置文件！" >> $LOGFILE2
+		return 0
+	else
+		echo_date "创建$(__get_type_abbr_name)配置文件到$TROJAN_CONFIG_FILE"
+		echo_date "创建$(__get_type_abbr_name)配置文件到$TROJAN_CONFIG_FILE" >> $LOGFILE2
+	fi
+		rm -rf "$TROJAN_CONFIG_FILE"
+		rm -rf "$TROJAN2_CONFIG_FILE"
+		
+		if [ "$ss_basic_type" == "4" ]; then
+			echo_date "类型为tj，值为$ss_basic_type" >> $LOGFILE2
+		cat > "$TROJAN_CONFIG_FILE" <<-EOF
+		{
+		    "run_type": "nat",
+		    "local_addr": "0.0.0.0",
+		    "local_port": 3333,
+		    "remote_addr": "$ss_basic_server",
+		    "remote_port": $ss_basic_port,
+		    "password": [
+			"$ss_basic_password"
+		    ],
+		    "log_level": 1,
+		    "ssl": {
+			"verify": true,
+			"verify_hostname": true,
+			"cert": "/rom/etc/ssl/certs/ca-certificates.crt",
+			"cipher": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+			"cipher_tls13": "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+			"sni": "",
+			"alpn": [
+			    "h2",
+			    "http/1.1"
+			],
+			"reuse_session": true,
+			"session_ticket": false,
+			"curves": ""
+		    },
+		    "tcp": {
+			"no_delay": true,
+			"keep_alive": true,
+			"reuse_port": $(get_function_switch $ss_basic_trojan_mp_enable),
+			"fast_open": true,
+			"fast_open_qlen": 20
+		    }
+		}
+			EOF
+		cat > "$TROJAN2_CONFIG_FILE" <<-EOF
+		{
+		    "run_type": "client",
+		    "local_addr": "127.0.0.1",
+		    "local_port": 23456,
+		    "remote_addr": "$ss_basic_server",
+		    "remote_port": $ss_basic_port,
+		    "password": [
+			"$ss_basic_password"
+		    ],
+		    "log_level": 1,
+		    "ssl": {
+			"verify": true,
+			"verify_hostname": true,
+			"cert": "/rom/etc/ssl/certs/ca-certificates.crt",
+			"cipher": "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES128-SHA:ECDHE-RSA-AES256-SHA:DHE-RSA-AES128-SHA:DHE-RSA-AES256-SHA:AES128-SHA:AES256-SHA:DES-CBC3-SHA",
+			"cipher_tls13": "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384",
+			"sni": "",
+			"alpn": [
+			    "h2",
+			    "http/1.1"
+			],
+			"reuse_session": true,
+			"session_ticket": false,
+			"curves": ""
+		    },
+		    "tcp": {
+			"no_delay": true,
+			"keep_alive": true,
+			"reuse_port": $(get_function_switch $ss_basic_trojan_mp_enable),
+			"fast_open": true,
+			"fast_open_qlen": 20
+		    }
+		}
+			EOF
+			echo_date trojan配置文件生成成功.
+			echo_date "trojan配置文件生成成功." >> $LOGFILE2
+		else
+			echo_date trojan配置文件生成失败，请检查设置!!!
+			echo_date "trojan配置文件生成失败，请检查设置!!!" >> $LOGFILE2
+		fi
+
+}
+
+start_trojan(){
+	echo_date 开启trojan主进程...
+	if [ "$ss_basic_tfo" == "1" ]; then
+		echo_date 开启tcp fast open支持.
+		echo 3 >/proc/sys/net/ipv4/tcp_fastopen
+		echo_date "开启TROJAN前，开启tcp fast open支持，需服务端开启支持" >> $LOGFILE2
+
+	fi
+	
+	cd /koolshare/bin
+	#测试前端传值用代码，用完记得屏蔽或删除####
+	#echo_date "ss_basic_type= $ss_basic_type" 
+	#echo_date "ss_basic_trojan_mulprocess= $ss_basic_trojan_mulprocess"
+	#echo_date "ss_basic_v2ray_mux_concurrency= $ss_basic_v2ray_mux_concurrency"
+	#echo_date "ss_basic_server= $ss_basic_server"
+	#echo_date "ss_basic_port= $ss_basic_port"
+	#echo_date "ss_basic_mode= $ss_basic_mode"
+	#echo_date $ss_basic_v2ray_mux_enable
+	#echo_date $ss_basic_trojan_mp_enable
+	#echo_date $ss_basic_trojan_mp_concurrency
+	#sleep 3s
+	###########################20200514
+	if [ "$ss_basic_trojan_mp_enable" -gt 0 ];then
+		if [ "$ss_basic_trojan_mulprocess" -lt 10 ];then
+			echo_date "多进程启动"
+			local count=1
+			while [ $count -le $ss_basic_trojan_mulprocess ]; do
+				echo_date "进程$count启动"
+				sleep 1s
+				/koolshare/bin/trojan -c /koolshare/ss/trojan.json >/dev/null 2>&1 &
+				let count++
+			done
+		else
+			echo_date "进程不建议超过10个，退出，请修改再运行"
+			close_in_five
+		fi
+	else
+		echo_date "使用单进程"
+		sleep 1s
+		/koolshare/bin/trojan -c /koolshare/ss/trojan.json >/dev/null 2>&1 &
+		
+	fi
+	#/koolshare/bin/trojan -c /koolshare/ss/trojan.json >/dev/null 2>&1 &
+	
+	echo_date "trojan启用进程!!!" 
+	echo_date "trojan启用进程!!!" >> $LOGFILE2
+	local trojanpid
+	local i=10
+	until [ -n "$trojanpid" ]; do
+		i=$(($i - 1))
+		trojanpid=$(pidof trojan)
+		if [ "$i" -lt 1 ];then
+			echo_date "trojan进程启动失败！"
+			close_in_five
+		fi
+		sleep 1
+	done
+	echo_date trojan启动成功，pid：$trojanpid
+	echo_date "trojan启动成功，pid：$trojanpid" >> $LOGFILE2
+}
 fire_redir() {
 	[ "$ss_basic_type" == "0" ] && [ "$ss_basic_mcore" == "1" ] && local ARG_1="--reuse-port" || local ARG_1=""
 	local ARG_2=""
 	if [ "$ss_basic_type" == "0" ] && [ "$ss_basic_tfo" == "1" ]; then
+		local ARG_2="--fast-open"
+		echo_date $BIN开启tcp fast open支持.
+		echo 3 >/proc/sys/net/ipv4/tcp_fastopen
+	fi
+	if [ "$ss_basic_type" == "4" ] && [ "$ss_basic_tfo" == "1" ]; then
 		local ARG_2="--fast-open"
 		echo_date $BIN开启tcp fast open支持.
 		echo 3 >/proc/sys/net/ipv4/tcp_fastopen
@@ -1447,6 +1891,7 @@ creat_v2ray_json() {
 		# inbounds area (7913 for dns resolve)
 		if [ "$ss_foreign_dns" == "7" ]; then
 			echo_date 配置v2ray dns，用于dns解析...
+			echo_date "inbounds area (7913 for dns resolve)配置v2ray dns，用于dns解析,ss_foreign_dns=" $ss_foreign_dns >> $LOGFILE2
 			cat >>"$V2RAY_CONFIG_FILE_TMP" <<-EOF
 				"inbounds": [
 					{
@@ -1473,6 +1918,7 @@ creat_v2ray_json() {
 			EOF
 		else
 			# inbounds area (23456 for socks5)
+			echo_date "inbounds area (23456 for socks5)配置v2ray dns，用于dns解析,ss_foreign_dns=" $ss_foreign_dns >> $LOGFILE2
 			cat >>"$V2RAY_CONFIG_FILE_TMP" <<-EOF
 				"inbounds": [
 					{
@@ -1538,11 +1984,18 @@ creat_v2ray_json() {
 			]
 			}
 		EOF
+		echo_date "创建V2Ray配置文件完毕1..." >> $LOGFILE2
 		echo_date 解析V2Ray配置文件...
 		cat "$V2RAY_CONFIG_FILE_TMP" | jq --tab . >"$V2RAY_CONFIG_FILE"
 		echo_date V2Ray配置文件写入成功到"$V2RAY_CONFIG_FILE"
+
+		echo_date "V2Ray配置文件写入成功1..." >> $LOGFILE2
+
 	elif [ "$ss_basic_v2ray_use_json" == "1" ]; then
 		echo_date 使用自定义的v2ray json配置文件...
+
+		echo_date "使用自定义的v2ray json配置文件 ss_basic_v2ray_use_json=$ss_basic_v2ray_use_json" >> $LOGFILE2
+
 		echo "$ss_basic_v2ray_json" | base64_decode >"$V2RAY_CONFIG_FILE_TMP"
 		local OB=$(cat "$V2RAY_CONFIG_FILE_TMP" | jq .outbound)
 		local OBS=$(cat "$V2RAY_CONFIG_FILE_TMP" | jq .outbounds)
@@ -1620,8 +2073,13 @@ creat_v2ray_json() {
 							}"
 		fi
 		echo_date 解析V2Ray配置文件...
+
+		echo_date "解析V2Ray配置文件2..." >> $LOGFILE2
+
 		echo $TEMPLATE | jq --argjson args "$OUTBOUNDS" '. + {outbounds: [$args]}' >"$V2RAY_CONFIG_FILE"
 		echo_date V2Ray配置文件写入成功到"$V2RAY_CONFIG_FILE"
+
+		echo_date "V2Ray配置文件写入成功2..." >> $LOGFILE2
 
 		# 检测用户json的服务器ip地址
 		v2ray_protocal=$(cat "$V2RAY_CONFIG_FILE" | jq -r .outbounds[0].protocol)
@@ -1711,6 +2169,7 @@ start_v2ray() {
 	cd /koolshare/bin
 	#export GOGC=30
 	v2ray --config=/koolshare/ss/v2ray.json >/dev/null 2>&1 &
+	echo_date "v2ray启用..." >> $LOGFILE2
 	local V2PID
 	local i=10
 	until [ -n "$V2PID" ]; do
@@ -1723,6 +2182,8 @@ start_v2ray() {
 		usleep 250000
 	done
 	echo_date v2ray启动成功，pid：$V2PID
+
+	echo_date "v2ray启动成功，pid：$V2PID" >> $LOGFILE2
 }
 
 write_cron_job() {
@@ -2262,6 +2723,7 @@ ss_pre_stop() {
 }
 
 detect() {
+	echo_date "检测jffs2脚本是否开启detect"
 	local MODEL=$(nvram get productid)
 	# 检测jffs2脚本是否开启，如果没有开启，将会影响插件的自启和DNS部分（dnsmasq.postconf）
 	#if [ "$MODEL" != "GT-AC5300" ];then
@@ -2422,6 +2884,7 @@ disable_ss() {
 	remove_ss_trigger_job
 	remove_ss_reboot_job
 	restore_conf
+	echo_date ------------------------- umount_dnsmasq -----------------------------
 	umount_dnsmasq_now
 	restart_dnsmasq
 	flush_nat
@@ -2430,41 +2893,70 @@ disable_ss() {
 }
 
 apply_ss() {
+	# router is on boot
+	WAN_ACTION=`ps|grep /jffs/scripts/wan-start|grep -v grep`
+	echo_date 在SS插件关闭前触发脚本appky_ss
 	ss_pre_stop
 	# now stop first
 	echo_date ======================= 梅林固件 - 【科学上网】 ========================
 	echo_date
 	echo_date ------------------------- 启动【科学上网】 -----------------------------
 	stop_status
+	echo_date ------------------------- 结束相关进程kill_process-------------------
 	kill_process
+	echo_date ------------------------- 相关进程结束完毕 ---------------------------
+	echo_date --------------------------------------------------------------------
+	echo_date ------------------------- 删除插件触发重启定时任务 -------------------
 	remove_ss_trigger_job
+	echo_date ------------------------- 删除完毕 ---------------------------------
+	echo_date -------------------------------------------------------------------
+	echo_date ------------------------- 删除插件自动重启定时任务 ------------------
 	remove_ss_reboot_job
+	echo_date ------------------------- 删除完毕 --------------------------------
+	echo_date ------------------------------------------------------------------
+	# 删除ss相关的名单配置文件
 	restore_conf
 	# restart dnsmasq when ss server is not ip or on router boot
 	umount_dnsmasq_now
 	restart_dnsmasq
+	# 清除iptables规则和ipset...
 	flush_nat
+	# 删除ss规则定时更新任务...
 	kill_cron_job
 	#echo_date ------------------------ 【科学上网】已关闭 ----------------------------
 	# pre-start
+	# 启动前触发脚本
 	ss_pre_start
 	# start
 	#echo_date ------------------------- 启动 【科学上网】 ----------------------------
+	# 检测jffs2脚本是否开启
 	detect
+	# 启动haveged，为系统提供更多的可用熵！
 	set_sys
+	# 服务器域名解析
 	resolv_server_ip
+	# 当为SS节点进行参数检查
 	ss_arg
 	load_module
+	# 创建ipset名单
 	creat_ipset
+	# 创建dnsmasq
 	create_dnsmasq_conf
 	# do not re generate json on router start, use old one
-	[ "$ss_basic_type" != "3" ] && creat_ss_json
-	[ "$ss_basic_type" = "3" ] && creat_v2ray_json
-	[ "$ss_basic_type" == "0" ] || [ "$ss_basic_type" == "1" ] && start_ss_redir
-	[ "$ss_basic_type" == "2" ] && start_koolgame
-	[ "$ss_basic_type" == "3" ] && start_v2ray
-	[ "$ss_basic_type" != "2" ] && start_kcp
-	[ "$ss_basic_type" != "2" ] && start_dns
+	echo_date -----------------根据节点类型启动插件相关功能 --------------------
+	[ -z "$WAN_ACTION" ] && [ "$ss_basic_type" != "3" ] && [ "$ss_basic_type" != "4" ] && [ "$ss_basic_type" != "5" ] && creat_ss_json && echo_date "创建ss_json，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ -z "$WAN_ACTION" ] && [ "$ss_basic_type" = "3" ] && creat_v2ray_json && echo_date "创建v2ray_json，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ -z "$WAN_ACTION" ] && [ "$ss_basic_type" = "4" ] && creat_trojan_json && echo_date "创建trojan_json，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ -z "$WAN_ACTION" ] && [ "$ss_basic_type" = "5" ] && creat_trojango_json && echo_date "创建trojango_json，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ "$ss_basic_type" == "0" ] || [ "$ss_basic_type" == "1" ] && start_ss_redir && echo_date "start_ss_redir，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ "$ss_basic_type" == "2" ] && start_koolgame && echo_date "start_koolgame，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ "$ss_basic_type" == "3" ] && start_v2ray && echo_date "start_v2ray，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ "$ss_basic_type" == "4" ] && start_trojan && echo_date "start_trojan，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	[ "$ss_basic_type" == "5" ] && start_trojango && echo_date "start_trojango，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	#非koolgame模式
+	[ "$ss_basic_type" != "2" ] && start_kcp && echo_date "start_kcp，ss_basic_type=$ss_basic_type" >> $LOGFILE2
+	#非koolgame模式
+	[ "$ss_basic_type" != "2" ] && start_dns && echo_date "start_dns，ss_basic_type=$ss_basic_type" >> $LOGFILE2
 	#===load nat start===
 	load_nat
 	#===load nat end===
@@ -2477,8 +2969,6 @@ apply_ss() {
 	write_numbers
 	# post-start
 	ss_post_start
-	#httping_check
-	#[ "$?" == "1" ] && return 1
 	check_status
 	echo_date ------------------------ 【科学上网】 启动完毕 ------------------------
 }
@@ -2515,12 +3005,13 @@ get_status() {
 }
 
 # =========================================================================
-
+# 从页面传进来的脚本执行动作
 case $ACTION in
 start)
 	set_lock
 	if [ "$ss_basic_enable" == "1" ]; then
 		logger "[软件中心]: 启动科学上网插件！"
+		#应用选择的节点信息启动程序
 		apply_ss >>"$LOG_FILE"
 		#get_status >> /tmp/upload/test.txt
 	else

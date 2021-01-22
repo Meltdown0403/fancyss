@@ -95,6 +95,7 @@ if [ -n "$MOUNTED" ];then
 	service restart_dnsmasq >/dev/null 2>&1
 fi
 
+#升级前先删除无关文件
 echo_date 清理旧文件
 rm -rf /koolshare/ss/*
 rm -rf /koolshare/scripts/ss_*
@@ -122,6 +123,10 @@ rm -rf /koolshare/bin/udp2raw
 rm -rf /koolshare/bin/v2ray
 rm -rf /koolshare/bin/v2ctl
 rm -rf /koolshare/bin/v2ray-plugin
+rm -rf /koolshare/bin/trojan
+rm -rf /koolshare/bin/trojan-go
+rm -rf /koolshare/bin/geoip.dat
+rm -rf /koolshare/bin/geosite.dat
 rm -rf /koolshare/bin/https_dns_proxy
 rm -rf /koolshare/bin/haveged
 rm -rf /koolshare/bin/https_dns_proxy

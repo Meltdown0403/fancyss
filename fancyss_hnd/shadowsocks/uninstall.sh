@@ -44,6 +44,10 @@ rm -rf /koolshare/bin/udp2raw
 rm -rf /koolshare/bin/v2ray
 rm -rf /koolshare/bin/v2ctl
 rm -rf /koolshare/bin/v2ray-plugin
+rm -rf /koolshare/bin/trojan
+rm -rf /koolshare/bin/trojan-go
+rm -rf /koolshare/bin/geoip.dat
+rm -rf /koolshare/bin/geosite.dat
 rm -rf /koolshare/bin/https_dns_proxy
 rm -rf /koolshare/bin/httping
 rm -rf /koolshare/bin/haveged

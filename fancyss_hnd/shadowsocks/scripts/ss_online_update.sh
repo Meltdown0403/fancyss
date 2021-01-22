@@ -3,9 +3,10 @@
 # shadowsocks script for HND/AXHND router with kernel 4.1.27/4.1.51 merlin firmware
 
 source /koolshare/scripts/ss_base.sh
-
+alias echo_date='echo 【$(TZ=UTC-8 date -R +%Y年%m月%d日\ %X)】:'
 LOCK_FILE=/tmp/online_update.lock
 LOG_FILE=/tmp/upload/ss_log.txt
+LOGFILE2=/tmp/upload/ssrun.log
 CONFIG_FILE=/koolshare/ss/ss.json
 BACKUP_FILE_TMP=/tmp/ss_conf_tmp.sh
 BACKUP_FILE=/tmp/ss_conf.sh
@@ -50,12 +51,22 @@ readonly PREFIX="ssconf_basic_name_
 				ssconf_basic_v2ray_json_
 				ssconf_basic_ss_v2ray_
 				ssconf_basic_ss_v2ray_opts_
-				ssconf_basic_type_"
+				ssconf_basic_type_
+				ssconf_basic_trojan_
+				ssconf_basic_trojango_
+				ssconf_basic_websocket_path_
+				ssconf_basic_wspasswd_
+				ssconf_basic_trojango_mux_enable_
+				ssconf_basic_trojango_mux_concurrency_
+				ssconf_basic_buffer_size_
+				"
 
 set_lock(){
 	exec 233>"$LOCK_FILE"
 	flock -n 233 || {
 		echo_date "订阅脚本已经在运行，请稍候再试！"
+		echo_date "订阅脚本已经在运行，请稍候再试！" >> $LOGFILE2
+		
 		exit 1
 	}
 }
@@ -85,6 +96,12 @@ get_type_name() {
 		3)
 			echo "v2ray"
 		;;
+		4)
+			echo "trojan"
+		;;
+		5)
+			echo "trojan-go"
+		;;
 	esac
 }
 
@@ -95,31 +112,41 @@ remove_all_node(){
 	for conf in $confs
 	do
 		echo_date "移除$conf"
+		echo_date "移除$conf" >> $LOGFILE2
 		dbus remove $conf
 	done
 }
 
 # 删除所有订阅节点
 remove_sub_node(){
+	rm -rf /tmp/upload/ssrun.log
+
 	echo_date "删除所有订阅节点信息...自添加的节点不受影响！"
+	echo_date "删除所有订阅节点信息...自添加的节点不受影响！" >> $LOGFILE2
 	remove_nus=$(export -p | grep ssconf_basic_ | grep _group_ | cut -d "=" -f1 | cut -d "_" -f4 | sort -n)
 	if [ -z "$remove_nus" ]; then
 		echo_date "节点列表内不存在任何订阅来源节点，退出！"
+		echo_date "节点列表内不存在任何订阅来源节点，退出！" >> $LOGFILE2
 		return 1
 	fi
 	for remove_nu in $remove_nus
 	do
 		echo_date "移除第$remove_nu节点：【$(eval echo \$ssconf_basic_name_${remove_nu})】"
+		echo_date "移除第$remove_nu节点：【$(eval echo \$ssconf_basic_name_${remove_nu})】" >> $LOGFILE2
 		for item in $PREFIX
 		do
 			dbus remove ${item}${remove_nu}
 		done
 	done
 	echo_date "所有订阅节点信息已经成功删除！"
+	echo_date "所有订阅节点信息已经成功删除！" >> $LOGFILE2
 }
 
 prepare(){
+	rm -rf /tmp/upload/ssrun.log
+
 	echo_date "开始节点数据检查..."
+	echo_date "开始节点数据检查" >> $LOGFILE2
 	local REASON=0
 	local SEQ_NU=$(echo ${NODES_SEQ} | tr ' ' '\n' | wc -l)
 	local MAX_NU=${NODE_INDEX}
@@ -133,18 +160,22 @@ prepare(){
 	if [ ${SEQ_NU} -ne ${MAX_NU} ]; then
 		let REASON+=1
 		echo_date "节点顺序不正确，需要调整！"
+		echo_date "节点顺序不正确，需要调整！" >> $LOGFILE2
 	fi
 
 	# 如果key的数量不等于value的数量，说明有些key储存了空值，需要清理一下。
 	if [ ${KEY_NU} -ne ${VAL_NU} ]; then
 		let REASON+=2
 		echo_date "节点配置有残余值，需要清理！"
+		echo_date "节点配置有残余值，需要清理！" >> $LOGFILE2
 	fi
 
 	if [ $REASON == "1" -o $REASON == "3" ]; then
 		# 提取干净的节点配置，并重新排序
 		echo_date "备份所有节点信息并重新排序..."
 		echo_date "如果节点数量过多，此处可能需要等待较长时间，请耐心等待..."
+		echo_date "备份所有节点信息并重新排序..." >> $LOGFILE2
+		echo_date "如果节点数量过多，此处可能需要等待较长时间，请耐心等待..." >> $LOGFILE2
 		rm -rf $BACKUP_FILE_TMP
 		rm -rf $BACKUP_FILE
 		local i=1
@@ -193,6 +224,7 @@ prepare(){
 		>> $BACKUP_FILE
 		
 		echo_date "备份完毕，开始调整..."
+		echo_date "备份完毕，开始调整..." >> $LOGFILE2
 		# 2 应用提取的干净的节点配置
 		chmod +x $BACKUP_FILE
 		sh $BACKUP_FILE
@@ -200,6 +232,7 @@ prepare(){
 	elif [ $REASON == "2" ]; then
 		# 提取干净的节点配置
 		echo_date "备份所有节点信息"
+		echo_date "备份所有节点信息..." >> $LOGFILE2
 		rm -rf $BACKUP_FILE
 		cat > $BACKUP_FILE <<-EOF
 			#!/bin/sh
@@ -232,12 +265,15 @@ prepare(){
 		echo dbus set ssconf_basic_node=\"${ssconf_basic_node}\" >> $BACKUP_FILE
 
 		echo_date "备份完毕"
+		echo_date "备份完毕..." >> $LOGFILE2
 		# 应用提取的干净的节点配置
 		chmod +x $BACKUP_FILE
 		sh $BACKUP_FILE
 		echo_date "调整完毕！节点信息备份在/koolshare/configs/ss_conf.sh"
+		echo_date "调整完毕！节点信息备份在/koolshare/configs/ss_conf.sh..." >> $LOGFILE2
 	else
 		echo_date "节点顺序正确，节点配置信息OK！无需调整！"
+		echo_date "节点顺序正确，节点配置信息OK！无需调整！" >> $LOGFILE2
 	fi
 }
 
@@ -269,6 +305,7 @@ add_ssr_nodes_offline(){
 	dbus set ssconf_basic_rss_obfs_param_$NODE_INDEX=$obfsparam
 	dbus set ssconf_basic_password_$NODE_INDEX=$password
 	echo_date "SSR节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。"
+	echo_date "SSR节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。" >> $LOGFILE2
 }
 
 add_ss_servers(){
@@ -281,6 +318,7 @@ add_ss_servers(){
 	dbus set ssconf_basic_password_$NODE_INDEX=$password
 	dbus set ssconf_basic_type_$NODE_INDEX="0"
 	echo_date "SS节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。"
+	echo_date "SS节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。" >> $LOGFILE2
 }
 
 get_ss_config(){
@@ -291,7 +329,142 @@ get_ss_config(){
 	password=$(echo "$decode_link" | awk -F':' '{print $2}' | awk -F'@' '{print $1}')
 	password=$(echo $password | base64_encode)
 }
+get_trojan_config(){
+	decode_link=$1
+	server=$(echo "$decode_link" |awk -F':' '{print $1}'|awk -F'@' '{print $2}')
+	server_port=$(echo "$decode_link" |awk -F':' '{print $2}')
+	password=$(echo "$decode_link" |awk -F':' '{print $1}'|awk -F'@' '{print $1}')
+	password=`echo $password|base64_encode`
 
+	[ -n "$group" ] && group_base64=`echo $group | base64_encode | sed 's/ -//g'`
+	[ -n "$server" ] && server_base64=`echo $server | base64_encode | sed 's/ -//g'`
+	#把全部服务器节点写入文件 /usr/share/shadowsocks/serverconfig/all_onlineservers
+	[ -n "$group" ] && [ -n "$server" ] && echo $server_base64 $group_base64 >> /tmp/all_onlineservers
+	#echo ------
+	#echo group: $group
+	#echo remarks: $remarks
+	#echo server: $server
+	#echo server_port: $server_port
+	#echo password: $password
+	#echo ------
+	echo "$group" >> /tmp/all_group_info.txt
+	[ -n "$group" ] && return 0 || return 1
+}
+
+add_trojan_servers(){
+	trojanindex=$(($(dbus list ssconf_basic_|grep _name_ | cut -d "=" -f1|cut -d "_" -f4|sort -rn|head -n1)+1))
+	echo_date "添加 Trojan 节点：$remarks"
+	echo_date "添加 Trojan 节点：$remarks" >> $LOGFILE2
+	[ -z "$1" ] && dbus set ssconf_basic_group_$trojanindex=$group
+	dbus set ssconf_basic_name_$trojanindex=$remarks
+	dbus set ssconf_basic_mode_$trojanindex=$ssr_subscribe_mode
+	dbus set ssconf_basic_server_$trojanindex=$server
+	dbus set ssconf_basic_port_$trojanindex=$server_port
+	dbus set ssconf_basic_password_$trojanindex=$password
+	dbus set ssconf_basic_type_$trojanindex="4"
+	echo_date "Trojan 节点：新增加 【$remarks】 到节点列表第 $trojanindex 位。"
+	echo_date "Trojan 节点：新增加 【$remarks】 到节点列表第 $trojanindex 位。" >> $LOGFILE2
+}
+
+update_trojan_config(){
+	isadded_server=$(cat /tmp/all_localservers | grep -w $group_base64 | awk '{print $1}' | grep -c $server_base64|head -n1)
+	if [ "$isadded_server" == "0" ]; then
+		add_trojan_servers
+		let addnum+=1
+	else
+		# 如果在本地的订阅节点中已经有该节点（用group和server去判断），检测下配置是否更改，如果更改，则更新配置
+		index=$(cat /tmp/all_localservers| grep $group_base64 | grep $server_base64 |awk '{print $3}'|head -n1)
+
+		local i=0
+		dbus set ssconf_basic_mode_$index="$ssr_subscribe_mode"
+		local_remarks=$(dbus get ssconf_basic_name_$index)
+		[ "$local_remarks" != "$remarks" ] && dbus set ssconf_basic_name_$index=$remarks && let i+=1
+		local_server=$(dbus get ssconf_basic_server_$index)
+		[ "$local_server" != "$server" ] && dbus set ssconf_basic_server_$index=$server && let i+=1
+		local_server_port=$(dbus get ssconf_basic_port_$index)
+		[ "$local_server_port" != "$server_port" ] && dbus set ssconf_basic_port_$index=$server_port && let i+=1
+		local_password=$(dbus get ssconf_basic_password_$index)
+		[ "$local_password" != "$password" ] && dbus set ssconf_basic_password_$index=$password && let i+=1
+
+		if [ "$i" -gt "0" ];then
+			echo_date "修改 Trojan 节点：【$remarks】" && let updatenum+=1
+			echo_date "修改 Trojan 节点：【$remarks】" >> $LOGFILE2
+		else
+			echo_date "Trojan 节点：【$remarks】 参数未发生变化，跳过！"
+			echo_date "Trojan 节点：【$remarks】 参数未发生变化，跳过！" >> $LOGFILE2
+		fi
+	fi
+}
+get_trojango_config(){
+	decode_link=$1
+	server=$(echo "$decode_link" |awk -F':' '{print $1}'|awk -F'@' '{print $2}')
+	server_port=$(echo "$decode_link" |awk -F':' '{print $2}')
+	password=$(echo "$decode_link" |awk -F':' '{print $1}'|awk -F'@' '{print $1}')
+	password=`echo $password|base64_encode`
+
+
+	[ -n "$group" ] && group_base64=`echo $group | base64_encode | sed 's/ -//g'`
+	[ -n "$server" ] && server_base64=`echo $server | base64_encode | sed 's/ -//g'`
+	#把全部服务器节点写入文件 /usr/share/shadowsocks/serverconfig/all_onlineservers
+	[ -n "$group" ] && [ -n "$server" ] && echo $server_base64 $group_base64 >> /tmp/all_onlineservers
+	#echo ------
+	#echo group: $group
+	#echo remarks: $remarks
+	#echo server: $server
+	#echo server_port: $server_port
+	#echo password: $password
+	#echo ------
+	echo "$group" >> /tmp/all_group_info.txt
+	[ -n "$group" ] && return 0 || return 1
+}
+
+add_trojango_servers(){
+	trojangoindex=$(($(dbus list ssconf_basic_|grep _name_ | cut -d "=" -f1|cut -d "_" -f4|sort -rn|head -n1)+1))
+	echo_date "添加 Trojan-go 节点：$remarks"
+	echo_date "添加 Trojan-go 节点：$remarks" >> $LOGFILE2
+	[ -z "$1" ] && dbus set ssconf_basic_group_$trojangoindex=$group
+	dbus set ssconf_basic_name_$trojangoindex=$remarks
+	dbus set ssconf_basic_mode_$trojangoindex=$ssr_subscribe_mode
+	dbus set ssconf_basic_trojango_mux_enable_$trojangoindex=0
+	dbus set ssconf_basic_server_$trojangoindex=$server
+	dbus set ssconf_basic_port_$trojangoindex=$server_port
+	dbus set ssconf_basic_password_$trojangoindex=$password
+	dbus set ssconf_basic_type_$trojangoindex="5"
+	
+	echo_date "Trojan-go 节点：新增加 【$remarks】 到节点列表第 $trojangoindex 位。"
+	echo_date "Trojan-go 节点：新增加 【$remarks】 到节点列表第 $trojangoindex 位。" >> $LOGFILE2
+
+}
+
+update_trojango_config(){
+	isadded_server=$(cat /tmp/all_localservers | grep -w $group_base64 | awk '{print $1}' | grep -c $server_base64|head -n1)
+	if [ "$isadded_server" == "0" ]; then
+		add_trojango_servers
+		let addnum+=1
+	else
+		# 如果在本地的订阅节点中已经有该节点（用group和server去判断），检测下配置是否更改，如果更改，则更新配置
+		index=$(cat /tmp/all_localservers| grep $group_base64 | grep $server_base64 |awk '{print $3}'|head -n1)
+
+		local i=0
+		dbus set ssconf_basic_mode_$index="$ssr_subscribe_mode"
+		local_remarks=$(dbus get ssconf_basic_name_$index)
+		[ "$local_remarks" != "$remarks" ] && dbus set ssconf_basic_name_$index=$remarks && let i+=1
+		local_server=$(dbus get ssconf_basic_server_$index)
+		[ "$local_server" != "$server" ] && dbus set ssconf_basic_server_$index=$server && let i+=1
+		local_server_port=$(dbus get ssconf_basic_port_$index)
+		[ "$local_server_port" != "$server_port" ] && dbus set ssconf_basic_port_$index=$server_port && let i+=1
+		local_password=$(dbus get ssconf_basic_password_$index)
+		[ "$local_password" != "$password" ] && dbus set ssconf_basic_password_$index=$password && let i+=1
+
+		if [ "$i" -gt "0" ];then
+			echo_date "修改 Trojan-go 节点：【$remarks】" && let updatenum+=1
+			echo_date "修改 Trojan-go 节点：【$remarks】" >> $LOGFILE2
+		else
+			echo_date "Trojan-go 节点：【$remarks】 参数未发生变化，跳过！"
+			echo_date "Trojan-go 节点：【$remarks】 参数未发生变化，跳过！" >> $LOGFILE2
+		fi
+	fi
+}
 get_v2ray_remote_config(){
 	decode_link="$1"
 	v2ray_group="$2"
@@ -445,8 +618,10 @@ update_v2ray_config(){
 
 		if [ "$i" -gt "0" ]; then
 			echo_date "修改v2ray节点：【$v2ray_ps】" && let updatenum+=1
+			echo_date "修改v2ray节点：【$v2ray_ps】" >> $LOGFILE2
 		else
 			echo_date "v2ray节点：【$v2ray_ps】参数未发生变化，跳过！"
+			echo_date "v2ray节点：【$v2ray_ps】参数未发生变化，跳过！" >> $LOGFILE2
 		fi
 	fi
 }
@@ -520,6 +695,7 @@ update_ssr_nodes(){
 
 	if [ "$FAILED_FLAG" == "1" ]; then
 		echo_date "检测到一个错误节点，跳过！"
+		echo_date "检测到一个错误节点，跳过！" >> $LOGFILE2
 		return 1
 	fi
 	
@@ -533,6 +709,7 @@ update_ssr_nodes(){
 	if [ -n "$KEY_WORDS_1" -a -z "$KEY_WORDS_2" ]; then
 		if [ -n "$KEY_MATCH_1" ]; then
 			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除]关键词"
+			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除]关键词1" >> $LOGFILE2
 			let exclude+=1 
 			local UPDATE_FLAG=2
 		else
@@ -541,6 +718,7 @@ update_ssr_nodes(){
 	elif [ -z "$KEY_WORDS_1" -a -n "$KEY_WORDS_2" ]; then
 		if [ -z "$KEY_MATCH_2" ]; then
 			echo_date "SSR节点：不添加【$remarks】节点，因为不匹配[包括]关键词"
+			echo_date "SSR节点：不添加【$remarks】节点，因为不匹配[包括]关键词2" >> $LOGFILE2
 			let exclude+=1 
 			local UPDATE_FLAG=2
 		else
@@ -549,10 +727,12 @@ update_ssr_nodes(){
 	elif [ -n "$KEY_WORDS_1" -a -n "$KEY_WORDS_2" ]; then
 		if [ -n "$KEY_MATCH_1" -a -z "$KEY_MATCH_2" ]; then
 			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除+包括]关键词"
+			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除+包括]关键词" >> $LOGFILE2
 			let exclude+=1 
 			local UPDATE_FLAG=2
 		elif [ -n "$KEY_MATCH_1" -a -n "$KEY_MATCH_2" ]; then
 			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除]关键词"
+			echo_date "SSR节点：不添加【$remarks】节点，因为匹配了[排除]关键词" >> $LOGFILE2
 			let exclude+=1 
 			local UPDATE_FLAG=2
 		elif  [ -z "$KEY_MATCH_1" -a -z "$KEY_MATCH_2" ]; then
@@ -575,6 +755,7 @@ update_ssr_nodes(){
 			# usleep 100000
 			let NODE_INDEX+=1
 			echo_date "SSR节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。"
+			echo_date "SSR节点：新增加【$remarks】到节点列表第 $NODE_INDEX 位。" >> $LOGFILE2
 			dbus set ssconf_basic_name_$NODE_INDEX=$remarks
 			dbus set ssconf_basic_group_$NODE_INDEX=$group
 			dbus set ssconf_basic_mode_$NODE_INDEX=$ssr_subscribe_mode
@@ -754,16 +935,21 @@ remove_node_gap(){
 	NODES_NU=$(export -p | grep "ssconf_basic" | grep _name_ | wc -l)
 	
 	echo_date "最大节点序号：$MAX"
+	echo_date "最大节点序号：$MAX" >> $LOGFILE2
 	echo_date "共有节点数量：$NODES_NU"
+	echo_date "共有节点数量：$NODES_NU" >> $LOGFILE2
 	if [ "$MAX" != "$NODES_NU" ]; then
 		echo_date "节点排序需要调整!"
+		echo_date "节点排序需要调整" >> $LOGFILE2
 		local y=1
 		for nu in $SEQ
 		do
 			if [ "$y" == "$nu" ]; then
 				echo_date "节点$y不需要调整！"
+				echo_date "节点$y不需要调整！" >> $LOGFILE2
 			else
 				echo_date "调整节点$nu到节点$y！"
+				echo_date "调整节点$nu到节点$y！" >> $LOGFILE2
 				for item in $PREFIX
 				do
 					#dbus remove ${item}${conf_nu}
@@ -783,6 +969,7 @@ remove_node_gap(){
 		done
 	else
 		echo_date "节点排序正确!"
+		echo_date "节点排序正确" >> $LOGFILE2
 	fi
 }
 
@@ -802,11 +989,22 @@ gap_test(){
 	NODES_NU=$(export -p | grep "ssconf_basic" | grep _name_ | wc -l)
 
 	echo_date "节点排序情况：$SEQ"
+	echo_date "节点排序正确" >> $LOGFILE2
+
 	echo_date "订阅排序情况：$SEQ_SUB"
+	echo_date "订阅排序情况：$SEQ_SUB" >> $LOGFILE2
+
 	echo_date "最大节点序号：$MAX"
+	echo_date "最大节点序号：$MAX" >> $LOGFILE2
+	
 	echo_date "共有节点数量：$NODES_NU"
+	echo_date "共有节点数量：$NODES_NU" >> $LOGFILE2
+
 	echo_date "共有间隔数量：$(($MAX - $NODES_NU))"
+	echo_date "共有间隔数量：$(($MAX - $NODES_NU))" >> $LOGFILE2
+
 	echo_date "需要移除节点：$(($NODES_NU + 1)) - $MAX"
+	echo_date "需要移除节点：$(($NODES_NU + 1)) - $MAX" >> $LOGFILE2
 
 	local nu=$(($NODES_NU + 1))
 	while [ "$nu" -le "$MAX" ]; do
@@ -826,10 +1024,12 @@ open_socks_23456(){
 		if [ "$ss_basic_type" == "1" ]; then
 			SOCKS_FLAG=1
 			echo_date "开启ssr-local，提供socks5代理端口：23456"
+			echo_date "开启ssr-local，提供socks5代理端口：23456" >> $LOGFILE2
 			rss-local -l 23456 -c $CONFIG_FILE -u -f /var/run/sslocal1.pid >/dev/null 2>&1
 		elif  [ "$ss_basic_type" == "0" ]; then
 			SOCKS_FLAG=2
 			echo_date "开启ss-local，提供socks5代理端口：23456"
+			echo_date "开启ss-local，提供socks5代理端口：23456" >> $LOGFILE2
 			if [ "$ss_basic_ss_obfs" == "0" ] && [ "$ss_basic_ss_v2ray" == "0" ]; then
 				ss-local -l 23456 -c $CONFIG_FILE -u -f /var/run/sslocal1.pid >/dev/null 2>&1
 			else
@@ -847,12 +1047,14 @@ get_oneline_rule_now(){
 	[ -z "$LINK_FORMAT" ] && return 4
 	
 	echo_date "开始更新在线订阅列表..." 
+	echo_date "开始更新在线订阅列表" >> $LOGFILE2
 	echo_date "开始下载订阅链接到本地临时文件，请稍等..."
+	echo_date "开始下载订阅链接到本地临时文件，请稍等" >> $LOGFILE2
 	rm -rf /tmp/ssr_subscribe_file* >/dev/null 2>&1
 	
 	if [ "$ss_basic_online_links_goss" == "1" ]; then
 		open_socks_23456
-		socksopen_b=$(netstat -nlp | grep -w 23456 | grep -E "local|v2ray")
+		socksopen_b=$(netstat -nlp | grep -w 23456 | grep -E "local|v2ray|trojan")
 		if [ -n "$socksopen_b" ]; then
 			echo_date "使用$(get_type_name $ss_basic_type)提供的socks代理网络下载..."
 			curl -4sSk --connect-timeout 8 --socks5-hostname 127.0.0.1:23456 $ssr_subscribe_link > /tmp/ssr_subscribe_file.txt
@@ -921,11 +1123,13 @@ get_oneline_rule_now(){
 		rm -rf /tmp/sub_group_info.txt
 		echo_date "下载订阅成功..."
 		echo_date "开始解析节点信息..."
+		echo_date "下载订阅成功开始解析节点信息" >> $LOGFILE2
 		decode_url_link $(cat /tmp/ssr_subscribe_file.txt) > /tmp/ssr_subscribe_file_temp1.txt
 		# 检测 ss ssr vmess
 		NODE_FORMAT1=$(cat /tmp/ssr_subscribe_file_temp1.txt | grep -E "^ss://")
 		NODE_FORMAT2=$(cat /tmp/ssr_subscribe_file_temp1.txt | grep -E "^ssr://")
 		NODE_FORMAT3=$(cat /tmp/ssr_subscribe_file_temp1.txt | grep -E "^vmess://")
+		NODE_FORMAT4=$(cat /tmp/ssr_subscribe_file_temp1.txt | grep -E "^trojan://")
 		if [ -n "$NODE_FORMAT1" ]; then
 			echo_date "暂时不支持ss节点订阅..."
 			echo_date "退出订阅程序..."
@@ -965,11 +1169,23 @@ get_oneline_rule_now(){
 			USER_ADD=$(($(export -p | grep ssconf_basic_ | grep _name_ | wc -l) - $(export -p | grep ssconf_basic_ | grep _group_ | wc -l))) || "0"
 			ONLINE_GET=$(dbus list ssconf_basic_ | grep _group_ | wc -l) || "0"
 			echo_date "-------------------------------------------------------------------"
+			echo_date "-------------------------------------------------------------------" >> $LOGFILE2
+
 			echo_date "本次更新订阅来源【$group】，共有节点$NODE_NU个，其中："
+			echo_date "本次更新订阅来源【$group】，共有节点$NODE_NU个，其中：" >> $LOGFILE2
+
 			echo_date "因关键词排除节点$exclude个，新增节点$addnum个，修改$updatenum个，删除$delnum个；"
+			echo_date "因关键词排除节点$exclude个，新增节点$addnum个，修改$updatenum个，删除$delnum个；" >> $LOGFILE2
+
 			echo_date "现共有自添加SSR节点：$USER_ADD 个；"
+			echo_date "现共有自添加SSR节点：$USER_ADD 个；" >> $LOGFILE2
+
 			echo_date "现共有订阅SSR节点：$ONLINE_GET 个；"
+			echo_date "现共有订阅SSR节点：$ONLINE_GET 个；" >> $LOGFILE2
+
 			echo_date "在线订阅列表更新完成!"
+			echo_date "在线订阅列表更新完成!" >> $LOGFILE2
+
 		elif [ -n "$NODE_FORMAT3" ]; then
 			# v2ray 订阅
 			# use domain as group
@@ -1006,8 +1222,45 @@ get_oneline_rule_now(){
 			echo_date "-------------------------------------------------------------------"
 			echo_date "本次更新订阅来源 【$v2ray_group】， 新增节点 $addnum 个，修改 $updatenum 个，删除 $delnum 个；"
 			echo_date "现共有自添加节点：$USER_ADD 个。"
-			echo_date "现共有订阅SSR/v2ray节点：$ONLINE_GET 个。"
-			echo_date "在线订阅列表更新完成!"			
+			echo_date "现共有订阅SSR/v2ray/Trojan节点：$ONLINE_GET 个。"
+			echo_date "在线订阅列表更新完成!"	
+		elif [ -n "$NODE_FORMAT4" ];then
+			# Trojan 订阅
+			# use domain as group
+			group=$(echo $ssr_subscribe_link|awk -F'[/:]' '{print $4}')
+			# 储存对应订阅链接的group信息
+			dbus set ss_online_group_$z=$group
+			echo $group >> /tmp/group_info.txt
+
+			local NODE_NU=$(cat /tmp/ssr_subscribe_file_temp1.txt | grep -c "trojan://")
+			echo_date "检测到 Trojan 节点格式，共计 $NODE_NU 个节点..."
+			urllinks=$(decode_url_link $(cat /tmp/ssr_subscribe_file.txt) | sed 's/trojan:\/\///g')
+
+			[ -z "$urllinks" ] && continue
+			for link in $urllinks
+			do
+				if [ -n "$(echo -n "$link" | grep "#")" ];then
+					new_sslink=$(echo -n "$link" | awk -F'#' '{print $1}' | sed 's/trojan:\/\///g')
+					# 因为订阅的 trojan 里面有 \r\n ，所以需要先去除，否则就炸了，只能卸载重装
+					remarks=$(echo -n "$link" | awk -F'#' '{print $2}' | sed 's/[\r\n ]//g')
+				else
+					new_sslink=$(echo -n "$link" | sed 's/trojan:\/\///g')
+					remarks='AddByLink'
+				fi
+				get_trojan_config $new_sslink
+				[ "$?" == "0" ] && update_trojan_config || echo_date "检测到一个错误节点，已经跳过！"
+			done
+
+			# 去除订阅服务器上已经删除的节点
+			del_none_exist
+			# 节点重新排序
+			remove_node_gap
+			USER_ADD=$(($(dbus list ssconf_basic_|grep _name_|wc -l) - $(dbus list ssconf_basic_|grep _group_|wc -l))) || 0
+			ONLINE_GET=$(dbus list ssconf_basic_|grep _group_|wc -l) || 0
+			echo_date "本次更新订阅来源 【$group】， 新增节点 $addnum 个，修改 $updatenum 个，删除 $delnum 个；"
+			echo_date "现共有自添加 SSR/v2ray/Trojan 节点：$USER_ADD 个。"
+			echo_date "现共有订阅 SSR/v2ray/Trojan 节点：$ONLINE_GET 个。"
+			echo_date "在线订阅列表更新完成!"		
 		else
 			return 3
 		fi
@@ -1016,7 +1269,7 @@ get_oneline_rule_now(){
 	fi
 }
 
-# 使用订阅链接订阅ssr/v2ray节点
+# 使用订阅链接订阅ssr/v2ray/trojan节点
 start_online_update(){
 	prepare
 	rm -rf /tmp/ssr_subscribe_file* >/dev/null 2>&1
@@ -1161,7 +1414,7 @@ start_online_update(){
 start_offline_update() {
 	echo_date "==================================================================="
 	usleep 100000
-	echo_date "通过SS/SSR/v2ray链接添加节点..."
+	echo_date "通过SS/SSR/v2ray/Trojan链接添加节点..."
 	rm -rf /tmp/ssr_subscribe_file.txt >/dev/null 2>&1
 	rm -rf /tmp/all_localservers.txt >/dev/null 2>&1
 	rm -rf /tmp/all_subscservers.txt >/dev/null 2>&1
@@ -1196,6 +1449,18 @@ start_offline_update() {
 				decode_sslink=$(decode_url_link $new_sslink)
 				get_ss_config $decode_sslink
 				add_ss_servers
+			elif [ -n "$(echo -n "$ssrlink" | grep "trojan://")" ]; then
+				echo_date "检测到 Trojan 链接...开始尝试解析..."
+				if [ -n "$(echo -n "$ssrlink" | grep "#")" ];then
+					new_sslink=$(echo -n "$ssrlink" | awk -F'#' '{print $1}' | sed 's/trojan:\/\///g')
+					remarks=$(echo -n "$ssrlink" | awk -F'#' '{print $2}')
+					echo "【$remarks】"
+				else
+					new_sslink=$(echo -n "$ssrlink" | sed 's/trojan:\/\///g')
+					remarks='AddByLink'
+				fi
+				get_trojan_config $new_sslink
+				add_trojan_servers 1
 			fi
 		fi
 		dbus remove ss_base64_links
@@ -1247,7 +1512,7 @@ case $2 in
 	unset_lock
 	;;
 3)
-	# 使用订阅链接订阅ssr/v2ray节点
+	# 使用订阅链接订阅ssr/v2ray/trojan节点
 	set_lock
 	echo " " > $LOG_FILE
 	http_response "$1"
@@ -1257,7 +1522,7 @@ case $2 in
 	unset_lock
 	;;
 4)
-	# 添加ss:// ssr:// vmess://离线节点
+	# 添加ss:// ssr:// vmess:// trojan://离线节点
 	set_lock
 	echo " " > $LOG_FILE
 	http_response "$1"

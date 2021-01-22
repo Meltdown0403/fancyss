@@ -72,6 +72,15 @@ echo_version() {
 			ss_basic_v2ray_version="null"
 		fi
 	fi
+	if [ -z "$ss_basic_trojan_version" ]; then
+		ss_basic_trojan_version_tmp=$(/koolshare/bin/trojan -v 2>&1|awk '/trojan/{print $4}')
+		if [ -n "$ss_basic_trojan_version_tmp" ]; then
+			ss_basic_v2ray_version="$ss_basic_trojan_version_tmp"
+			dbus set ss_basic_trojan_version="$ss_basic_trojan_version_tmp"
+		else
+			ss_basic_trojan_version="null"
+		fi
+	fi
 	echo ① 程序版本（插件版本：$SOFVERSION）：
 	echo -----------------------------------------------------------
 	echo "程序			版本			备注"
@@ -93,6 +102,8 @@ echo_version() {
 	echo "v2ray-plugin		v1.3.1			Official Release 2020年06月01日"
 	echo "SmartDNS		1.2020.05.04-0005	Official Release 2020年05月04日"
 	echo "kcptun			20200409		Official Release 2020年04月09日"
+	echo "trojan			$ss_basic_trojan_version"
+	echo "trojan-go		0.8.2"
 	echo -----------------------------------------------------------
 }
 
@@ -114,6 +125,8 @@ check_status() {
 	KCPTUN=$(pidof client_linux_arm7)
 	HAPROXY=$(pidof haproxy)
 	V2RAY=$(pidof v2ray)
+	TROJAN=$(pidof trojan)
+	TROJANGO=$(pidof trojan-go)
 	HDP=$(pidof https_dns_proxy)
 	DMQ=$(pidof dnsmasq)
 	SMD=$(pidof smartdns)
@@ -150,6 +163,20 @@ check_status() {
 		echo -----------------------------------------------------------
 		echo "程序		状态	PID"
 		[ -n "$V2RAY" ] && echo "v2ray		工作中	pid：$V2RAY" || echo "v2ray	未运行"
+	elif [ "$ss_basic_type" == "4" ]; then
+		echo_version
+		echo
+		echo ② 检测当前相关进程工作状态：（你正在使用Trojan,选择的模式是$(get_mode_name $ss_basic_mode),国外DNS解析方案是：$(get_dns_name $ss_foreign_dns)）
+		echo -----------------------------------------------------------
+		echo "程序		状态	PID"
+		[ -n "$TROJAN" ] && echo "trojan		工作中	pid：$TROJAN" || echo "trojan	未运行"
+	elif [ "$ss_basic_type" == "5" ]; then
+		echo_version
+		echo
+		echo ② 检测当前相关进程工作状态：（你正在使用Trojan-go,选择的模式是$(get_mode_name $ss_basic_mode),国外DNS解析方案是：$(get_dns_name $ss_foreign_dns)）
+		echo -----------------------------------------------------------
+		echo "程序		状态	PID"
+		[ -n "$TROJANGO" ] && echo "trojan-GO		工作中	pid：$TROJANGO" || echo "trojan-go	未运行"
 	fi
 
 	if [ -z "$ss_basic_koolgame_udp" ]; then
